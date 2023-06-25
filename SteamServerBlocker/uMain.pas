@@ -55,7 +55,7 @@ uses
   uPing;
 
 const
-  APP_VERSION = '0.8';
+  APP_VERSION = '0.8.1';
   SERVERS_FILENAME = 'Servers.db';
   ALLOWED_TEXT = '✔';
   BLOCKED_TEXT = '✖';
@@ -91,14 +91,14 @@ end;
 
 procedure TMainForm.ButtonUnblockAllClick(Sender: TObject);
 begin
-  TServerBlocker.UnblockAll(FServerDataUpdater.List);
+  TServerBlocker.Unblock(FServerDataUpdater.List);
 
   LoadServerDataToGrid;
 end;
 
 procedure TMainForm.ButtonBlockAllClick(Sender: TObject);
 begin
-  TServerBlocker.BlockAll(FServerDataUpdater.List);
+  TServerBlocker.Block(FServerDataUpdater.List);
 
   LoadServerDataToGrid;
 end;
@@ -241,12 +241,10 @@ var
 begin
   if FServerDataUpdater.GetServerDataByName(Name, ServerData) then
   begin
-    ServerData.IsBlocked := not ServerData.IsBlocked;
-
     if ServerData.IsBlocked then
-      TServerBlocker.Block(ServerData)
+      TServerBlocker.Unblock(ServerData)
     else
-      TServerBlocker.Unblock(ServerData);
+      TServerBlocker.Block(ServerData);
   end;
 
 end;

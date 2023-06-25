@@ -34,18 +34,18 @@ type
 type
   TServerBlocker = class
   private
-    class procedure SetIsBlocked(List: TList<TServerData>; Value: Boolean); static;
+    class procedure SetIsBlocked(const List: TList<TServerData>; Value: Boolean); static;
   public
-    class procedure Block(const ServerData: PServerData); static;
-    class procedure BlockAll(List: TList<TServerData>); static;
-    class procedure Unblock(const ServerData: PServerData); static;
-    class procedure UnblockAll(List: TList<TServerData>); static;
+    class procedure Block(const ServerData: PServerData); overload; static;
+    class procedure Block(const List: TList<TServerData>); overload; static;
+    class procedure Unblock(const ServerData: PServerData); overload; static;
+    class procedure Unblock(const List: TList<TServerData>); overload; static;
   end;
 
 type
   TServerDataUpdater = class
   private const
-    NETWORK_CONFIG_URL = 'https://raw.githubusercontent.com/SteamDatabase/SteamTracking/master/Random/NetworkDatagramConfig.json';
+    NETWORK_CONFIG_URL = 'https://api.steampowered.com/ISteamApps/GetSDRConfig/v1?appid=730';
     DEFAULT_TIMEOUT = 1000;
   private
     FHttpClient: THTTPClient;
@@ -89,7 +89,7 @@ type
 
 { TServerBlocker }
 
-class procedure TServerBlocker.SetIsBlocked(List: TList<TServerData>; Value: Boolean);
+class procedure TServerBlocker.SetIsBlocked(const List: TList<TServerData>; Value: Boolean);
 var
   P: PServerData;
   i: Integer;
@@ -109,53 +109,46 @@ class procedure TServerBlocker.Block(const ServerData: PServerData);
 var
   IpList: string;
   Relay: TRelay;
-  Ip: string;
-  i: Integer;
-  IpDict: TDictionary<string, Byte>;
-  Pair: TPair<string, Byte>;
-
-  function RemoveLastOctet(const Ip: string): string;
-  begin
-    Result := Ip;
-    SetLength(Result, Ip.LastIndexOf('.') + 1);
-  end;
-
 begin
+  if ServerData.IsBlocked then
+    Exit;
+
   ServerData.IsBlocked := True;
-  IpDict := TDictionary<string, Byte>.Create;
 
   IpList := '';
 
   for Relay in ServerData.RelayList do
   begin
-    Ip := RemoveLastOctet(Relay.IPv4);
-    IpDict.TryAdd(Ip, 0);
+    IpList := IpList + Relay.IPv4 + ',';
   end;
 
-  for Pair in IpDict do
-  begin
-    for i := 0 to Byte.MaxValue do
-      IpList := IpList + Pair.Key + i.ToString + ',';
-  end;
-
-  SetLength(IpList, IpList.Length - 1);
-
-  IpDict.Free;
+  if IpList.Length > 0 then
+    SetLength(IpList, IpList.Length - 1);
 
   TFirewallRules.Add(ServerData.Name, IpList);
 end;
 
-class procedure TServerBlocker.BlockAll(List: TList<TServerData>);
+class procedure TServerBlocker.Block(const List: TList<TServerData>);
+var
+  P: PServerData;
+  i: Integer;
 begin
-  SetIsBlocked(List, True);
+  if List.Count > 0 then
+    for i := 0 to List.Count - 1 do
+    begin
+      P := @List.List[i];
+      Block(P);
+    end;
 end;
 
 class procedure TServerBlocker.Unblock(const ServerData: PServerData);
 begin
+  ServerData.IsBlocked := False;
+
   TFirewallRules.Remove(ServerData.Name);
 end;
 
-class procedure TServerBlocker.UnblockAll(List: TList<TServerData>);
+class procedure TServerBlocker.Unblock(const List: TList<TServerData>);
 begin
   SetIsBlocked(List, False);
 
@@ -271,9 +264,6 @@ begin
           ServerData := Default(TServerData);
 
           if not Item.TryGetValue<string>('desc', ServerData.Name) then
-            Continue;
-
-          if not Item.TryGetValue<Boolean>('has_gameservers', HasGameServers) then
             Continue;
 
           if not Item.TryGetValue<TJSONArray>('relays', JsonArray) then
